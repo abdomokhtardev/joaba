@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap&font-display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-midnight text-slate-50 font-tajawal;
+    direction: rtl;
+  }
+  
+  /* Reset inputs outline */
+  input:focus, textarea:focus, select:focus {
+    @apply outline-none ring-1 ring-accent-primary border-transparent;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-glass-bg border border-glass-border backdrop-blur-md rounded-2xl;
+  }
+  
+  .btn-primary {
+    @apply bg-accent-primary text-white px-5 py-2.5 rounded-xl font-medium transition-all hover:bg-accent-hover hover:shadow-[0_4px_12px_rgba(99,102,241,0.3)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer;
+  }
+  
+  .btn-secondary {
+    @apply bg-transparent border border-glass-border text-slate-50 px-5 py-2.5 rounded-xl transition-all hover:bg-white/10 cursor-pointer;
+  }
+  
+  .input-glass {
+    @apply bg-white/5 border border-glass-border text-slate-50 rounded-xl px-4 py-2.5 transition-all w-full;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+/* Hide number input spinners */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* Custom Select styling */
+select.input-glass {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: left 1rem center;
+  background-size: 1.2em;
+  padding-left: 2.5rem;
+}
+select.input-glass option {
+  background-color: #0f172a;
+  color: white;
+  padding: 10px;
+}

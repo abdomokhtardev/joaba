@@ -1,0 +1,232 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // =============== Helper Functions (محسَّنة) ===============
+    
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function getUserData() {
+      let user = get(/databases/$(database)/documents/users/$(uid())).data;
+      return user != null ? user : {};
+    }
+
+    function isAdmin() {
+      return isAuth() && getUserData().role == 'admin';
+    }
+
+    function isActive() {
+      return isAuth() && getUserData().get('status', 'active') == 'active';
+    }
+
+    function isValidString(text, maxLength) {
+      return text is string && text.size() > 0 && text.size() <= maxLength;
+    }
+
+    function isCodeValid(doc) {
+      return doc.isValid == true && 
+             (!('expiresAt' in doc) || doc.expiresAt > request.time);
+    }
+
+    // =============== SaaS Collections ===============
+
+    match /users/{userId} {
+      allow read: if isAuth() && (uid() == userId || isAdmin());
+      
+      allow create: if isAuth() && uid() == userId
+        && request.resource.data.role == 'user'
+        && isValidString(request.resource.data.email, 255)
+        && request.resource.data.status == 'active'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.diff({}).affectedKeys().hasOnly([
+          'email', 'role', 'status', 'createdAt'
+        ]);
+      
+      allow update: if isAdmin()
+        || (isActive() && uid() == userId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'subscriptionEndDate', 
+              'lastReadAnnouncement', 
+              'eulaAccepted', 
+              'hasSubscribedBefore',
+              'profile'
+            ]));
+      
+      allow delete: if isAdmin();
+    }
+
+    match /payment_requests/{reqId} {
+      allow read: if isAuth() && (resource.data.userId == uid() || isAdmin());
+      
+      allow create: if isActive() && request.resource.data.userId == uid()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.amount > 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      
+      allow update: if isAdmin() 
+        || (isActive() && resource.data.userId == uid() 
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+            && request.resource.data.status in ['archived', 'cancelled']);
+      
+      allow delete: if isAdmin();
+    }
+
+    match /activation_codes/{codeId} {
+      allow get: if isActive();
+      
+      allow list: if isAdmin() || (isActive() && request.query.limit <= 1);
+      
+      allow create: if isAdmin()
+        && request.resource.data.isValid == true
+        && isValidString(request.resource.data.code, 50)
+        && request.resource.data.createdAt == request.time
+        && (!('expiresAt' in request.resource.data) 
+            || request.resource.data.expiresAt > request.time);
+      
+      allow update: if isActive()
+        && resource.data.isValid == true
+        && isCodeValid(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'isValid', 'usedBy', 'usedByEmail', 'usedAt'
+        ])
+        && request.resource.data.isValid == false
+        && (request.resource.data.usedBy == uid() || request.resource.data.usedBy == request.auth.token.email)
+        && (!('usedByEmail' in request.resource.data) || request.resource.data.usedByEmail == request.auth.token.email)
+        && request.resource.data.usedAt == request.time;
+      
+      allow delete: if isAdmin();
+    }
+
+    match /promo_codes/{codeId} {
+      allow get: if isActive();
+      
+      allow list: if isAdmin() || (isActive() && request.query.limit <= 1);
+      
+      allow write: if isAdmin();
+    }
+
+    match /announcements/{annId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    match /affiliates/{affId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /settings/{docId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // =============== Core Application Collections ===============
+
+    match /projects/{projectId} {
+      allow read: if isActive() && resource.data.userId == uid();
+      
+      allow create: if isActive() && request.resource.data.userId == uid()
+        && isValidString(request.resource.data.title, 200)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      
+      allow update: if isActive() && resource.data.userId == uid()
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['title']) 
+            || isValidString(request.resource.data.title, 200));
+      
+      allow delete: if isActive() && resource.data.userId == uid();
+    }
+
+    match /links/{linkId} {
+      allow read: if isActive() && resource.data.userId == uid();
+      
+      allow create: if isActive() && request.resource.data.userId == uid()
+        && isValidString(request.resource.data.title, 200)
+        && isValidString(request.resource.data.url, 2000)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      
+      allow update: if isActive() && resource.data.userId == uid()
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['title']) 
+            || isValidString(request.resource.data.title, 200))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['url']) 
+            || isValidString(request.resource.data.url, 2000));
+      
+      allow delete: if isActive() && resource.data.userId == uid();
+    }
+
+    match /journals/{journalId} {
+      allow read: if isActive() && resource.data.userId == uid();
+      
+      allow create: if isActive() && request.resource.data.userId == uid()
+        && isValidString(request.resource.data.text, 20000)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      
+      allow update: if isActive() && resource.data.userId == uid()
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['text']) 
+            || isValidString(request.resource.data.text, 20000));
+      
+      allow delete: if isActive() && resource.data.userId == uid();
+    }
+
+    match /habits/{habitId} {
+      allow read: if isActive() && resource.data.userId == uid();
+      
+      allow create: if isActive() && request.resource.data.userId == uid()
+        && isValidString(request.resource.data.name, 100)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      
+      allow update: if isActive() && resource.data.userId == uid()
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['name']) 
+            || isValidString(request.resource.data.name, 100));
+      
+      allow delete: if isActive() && resource.data.userId == uid();
+    }
+
+    match /support_tickets/{ticketId} {
+      allow read: if isAuth() && (resource.data.userId == uid() || isAdmin());
+      
+      allow create: if isAuth() && request.resource.data.userId == uid()
+        && isValidString(request.resource.data.message, 5000)
+        && request.resource.data.createdAt == request.time;
+      
+      allow update: if isAdmin()
+        || (isAuth() && resource.data.userId == uid()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userSeen']));
+      
+      allow delete: if isAdmin() || (isAuth() && resource.data.userId == uid());
+    }
+
+    // منع أي وصول لمجموعات غير معرّفة
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
