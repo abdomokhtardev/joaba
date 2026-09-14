@@ -3,228 +3,230 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // =============== Helper Functions (محسَّنة) ===============
+    // =========================================================================
+    // 🛡️ دوال الأمان المركزية (Security Helpers)
+    // =========================================================================
     
+    // التحقق من أن المستخدم مسجل دخول ومصادق عليه
     function isAuth() {
       return request.auth != null;
     }
 
+    // معرف المستخدم الحالي
     function uid() {
       return request.auth.uid;
     }
 
+    // التحقق من أن المستخدم هو صاحب هذا المعرف
+    function isOwner(userId) {
+      return isAuth() && uid() == userId;
+    }
+
+    // جلب بيانات المستخدم من مجموعة users بأمان
     function getUserData() {
-      let user = get(/databases/$(database)/documents/users/$(uid())).data;
-      return user != null ? user : {};
+      let userDoc = get(/databases/$(database)/documents/users/$(uid()));
+      return userDoc != null ? userDoc.data : {};
     }
 
+    // التحقق مما إذا كان المستخدم أدمن المنصة
     function isAdmin() {
-      return isAuth() && getUserData().role == 'admin';
+      return isAuth() && (
+        request.auth.token.get('role', '') == 'admin' ||
+        getUserData().get('role', 'user') == 'admin'
+      );
     }
 
-    function isActive() {
+    // التحقق من أن حساب المستخدم نشط وغير موقوف (Active)
+    function isUserActive() {
       return isAuth() && getUserData().get('status', 'active') == 'active';
     }
 
-    function isValidString(text, maxLength) {
-      return text is string && text.size() > 0 && text.size() <= maxLength;
-    }
-
-    function isCodeValid(doc) {
-      return doc.isValid == true && 
-             (!('expiresAt' in doc) || doc.expiresAt > request.time);
-    }
-
-    // =============== SaaS Collections ===============
-
+    // =========================================================================
+    // 1. إدارة المستخدمين (Users Collection)
+    // =========================================================================
     match /users/{userId} {
-      allow read: if isAuth() && (uid() == userId || isAdmin());
+      // القراءة: صاحب الحساب أو الأدمن (المستخدم الموقوف مسموح له بقراءة حسابه لمعرفة حالته)
+      allow read: if isOwner(userId) || isAdmin();
       
-      allow create: if isAuth() && uid() == userId
-        && request.resource.data.role == 'user'
-        && isValidString(request.resource.data.email, 255)
-        && request.resource.data.status == 'active'
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.diff({}).affectedKeys().hasOnly([
-          'email', 'role', 'status', 'createdAt'
-        ]);
+      // الإنشاء: عند تسجيل حساب جديد، يمنع المستخدم من منح نفسه رتبة أدمن أو حالة موقوف
+      allow create: if isOwner(userId)
+        && request.resource.data.get('role', 'user') == 'user'
+        && request.resource.data.get('status', 'active') == 'active';
       
-      allow update: if isAdmin()
-        || (isActive() && uid() == userId
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'subscriptionEndDate', 
-              'lastReadAnnouncement', 
-              'eulaAccepted', 
-              'hasSubscribedBefore',
-              'profile'
-            ]));
+      // التعديل:
+      // - الأدمن يملك كامل الصلاحيات (تغيير الرتبة، إيقاف الحساب، تمديد الاشتراك).
+      // - المستخدم العادي يعدل بياناته الشخصية واشتراكه دون القدرة على تغيير رتبته أو حالته.
+      allow update: if isAdmin() || (
+        isOwner(userId)
+        && request.resource.data.get('role', 'user') == resource.data.get('role', 'user')
+        && request.resource.data.get('status', 'active') == resource.data.get('status', 'active')
+      );
       
+      // الحذف: للأدمن فقط
       allow delete: if isAdmin();
     }
 
+    // =========================================================================
+    // 2. المشاريع ومساحات العمل (Projects & Subcollections)
+    // =========================================================================
+    match /projects/{projectId} {
+      // get: صاحب المشروع فقط (حماية الخصوصية التامة)
+      allow get: if isAuth() && resource.data.userId == uid();
+      // list: صاحب المشروع، أو الأدمن (لجلب المعرفات أثناء الحذف التتابعي)
+      allow list: if (isAuth() && resource.data.userId == uid()) || isAdmin();
+      
+      // الإنشاء والتعديل: لصاحب الحساب النشط فقط
+      allow create: if isAuth() && request.resource.data.userId == uid() && isUserActive();
+      allow update: if isAuth() && resource.data.userId == uid() && request.resource.data.userId == uid() && isUserActive();
+      
+      // الحذف: لصاحب المشروع، أو للأدمن عند الحذف التتابعي للحساب
+      allow delete: if (isAuth() && resource.data.userId == uid()) || isAdmin();
+
+      // المجموعات الفرعية داخل المشاريع (المهام والملاحظات الفرعية)
+      match /{subcollection}/{docId} {
+        allow get: if isAuth() && get(/databases/$(database)/documents/projects/$(projectId)).data.userId == uid();
+        allow list: if (isAuth() && get(/databases/$(database)/documents/projects/$(projectId)).data.userId == uid()) || isAdmin();
+        allow create, update: if isAuth() && get(/databases/$(database)/documents/projects/$(projectId)).data.userId == uid() && isUserActive();
+        allow delete: if (isAuth() && get(/databases/$(database)/documents/projects/$(projectId)).data.userId == uid()) || isAdmin();
+      }
+    }
+
+    // =========================================================================
+    // 3. قبو الروابط (Links Vault)
+    // =========================================================================
+    match /links/{linkId} {
+      allow get: if isAuth() && resource.data.userId == uid();
+      allow list: if (isAuth() && resource.data.userId == uid()) || isAdmin();
+      
+      allow create: if isAuth() && request.resource.data.userId == uid() && isUserActive();
+      allow update: if isAuth() && resource.data.userId == uid() && request.resource.data.userId == uid() && isUserActive();
+      allow delete: if (isAuth() && resource.data.userId == uid()) || isAdmin();
+    }
+
+    // =========================================================================
+    // 4. سجل اليوميات والأفكار (Journals)
+    // =========================================================================
+    match /journals/{journalId} {
+      // خصوصية مطلقة: المالك فقط يقرأ نص يومياته، بينما الأدمن مسموح له فقط بـ list للحذف التتابعي
+      allow get: if isAuth() && resource.data.userId == uid();
+      allow list: if (isAuth() && resource.data.userId == uid()) || isAdmin();
+      
+      allow create: if isAuth() && request.resource.data.userId == uid() && isUserActive();
+      allow update: if isAuth() && resource.data.userId == uid() && request.resource.data.userId == uid() && isUserActive();
+      allow delete: if (isAuth() && resource.data.userId == uid()) || isAdmin();
+    }
+
+    // =========================================================================
+    // 5. متتبع العادات (Habits Tracker)
+    // =========================================================================
+    match /habits/{habitId} {
+      allow get: if isAuth() && resource.data.userId == uid();
+      allow list: if (isAuth() && resource.data.userId == uid()) || isAdmin();
+      
+      allow create: if isAuth() && request.resource.data.userId == uid() && isUserActive();
+      allow update: if isAuth() && resource.data.userId == uid() && request.resource.data.userId == uid() && isUserActive();
+      allow delete: if (isAuth() && resource.data.userId == uid()) || isAdmin();
+    }
+
+    // =========================================================================
+    // 6. طلبات الدفع والاشتراكات (Payment Requests)
+    // =========================================================================
     match /payment_requests/{reqId} {
-      allow read: if isAuth() && (resource.data.userId == uid() || isAdmin());
+      allow read: if (isAuth() && resource.data.userId == uid()) || isAdmin();
       
-      allow create: if isActive() && request.resource.data.userId == uid()
-        && request.resource.data.status == 'pending'
-        && request.resource.data.amount > 0
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
+      // الإنشاء: للمستخدم بحالة مبدئية معلقة pending
+      allow create: if isAuth() && request.resource.data.userId == uid()
+        && request.resource.data.get('status', 'pending') == 'pending';
       
-      allow update: if isAdmin() 
-        || (isActive() && resource.data.userId == uid() 
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-            && request.resource.data.status in ['archived', 'cancelled']);
+      // التعديل:
+      // - الأدمن يوافق أو يرفض أو يؤرشف
+      // - المستخدم يمكنه فقط أرشفة أو إلغاء طلبه
+      allow update: if isAdmin() || (
+        isAuth() && resource.data.userId == uid()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['archived', 'cancelled']
+      );
       
       allow delete: if isAdmin();
     }
 
+    // =========================================================================
+    // 7. تذاكر الدعم والاقتراحات (Support Tickets)
+    // =========================================================================
+    match /support_tickets/{ticketId} {
+      // القراءة: صاحب التذكرة لمتابعة الرد، أو الأدمن
+      allow read: if (isAuth() && resource.data.userId == uid()) || isAdmin();
+      
+      // الإنشاء: لأي مستخدم مسجل دخول (حتى الموقوف لطلب المساعدة)
+      allow create: if isAuth() && request.resource.data.userId == uid();
+      
+      // التعديل:
+      // - الأدمن يضيف الرد ويغير الحالة
+      // - المستخدم يحدث فقط إشعار القراءة userSeen
+      allow update: if isAdmin() || (
+        isAuth() && resource.data.userId == uid()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userSeen'])
+      );
+      
+      // الحذف: للأدمن فقط لحفظ السجل التاريخي للدعم الفني
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 8. أكواد التفعيل (Activation Codes)
+    // =========================================================================
     match /activation_codes/{codeId} {
-      allow get: if isActive();
+      allow get: if isAuth();
+      // حصر استعلام المستخدم بحد أقصى كود واحد لمنع تسريب أو كشط الأكواد
+      allow list: if isAdmin() || (isAuth() && request.query.limit <= 1);
       
-      allow list: if isAdmin() || (isActive() && request.query.limit <= 1);
+      allow create, delete: if isAdmin();
       
-      allow create: if isAdmin()
-        && request.resource.data.isValid == true
-        && isValidString(request.resource.data.code, 50)
-        && request.resource.data.createdAt == request.time
-        && (!('expiresAt' in request.resource.data) 
-            || request.resource.data.expiresAt > request.time);
-      
-      allow update: if isActive()
+      // التعديل: الأدمن، أو المستخدم عند استخدام كود صالح لإلغاء تفعيله
+      allow update: if isAdmin() || (
+        isAuth()
         && resource.data.isValid == true
-        && isCodeValid(resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'isValid', 'usedBy', 'usedByEmail', 'usedAt'
-        ])
         && request.resource.data.isValid == false
-        && (request.resource.data.usedBy == uid() || request.resource.data.usedBy == request.auth.token.email)
-        && (!('usedByEmail' in request.resource.data) || request.resource.data.usedByEmail == request.auth.token.email)
-        && request.resource.data.usedAt == request.time;
-      
-      allow delete: if isAdmin();
+      );
     }
 
+    // =========================================================================
+    // 9. أكواد الخصم الترويجية (Promo Codes)
+    // =========================================================================
     match /promo_codes/{codeId} {
-      allow get: if isActive();
-      
-      allow list: if isAdmin() || (isActive() && request.query.limit <= 1);
-      
+      allow get: if isAuth();
+      // حصر استعلام المستخدم بكود واحد فقط
+      allow list: if isAdmin() || (isAuth() && request.query.limit <= 1);
       allow write: if isAdmin();
     }
 
+    // =========================================================================
+    // 10. نظام المسوقين والعمولات (Affiliates)
+    // =========================================================================
+    match /affiliates/{affId} {
+      allow read, write: if isAdmin();
+    }
+
+    // =========================================================================
+    // 11. الإعلانات والتحديثات (Announcements)
+    // =========================================================================
     match /announcements/{annId} {
       allow read: if isAuth();
       allow write: if isAdmin();
     }
 
-    match /affiliates/{affId} {
-      allow read, write: if isAdmin();
-    }
-
-    match /settings/{docId} {
-      allow read: if isAuth();
+    // =========================================================================
+    // 12. الإعدادات العامة للمنصة (General Settings)
+    // =========================================================================
+    match /settings/{settingId} {
+      // قراءة عامة للجميع (الشريط الإعلاني، مدة التجربة المجانية، معلومات التطبيق)
+      allow read: if true;
       allow write: if isAdmin();
     }
 
-    match /audit_logs/{logId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update, delete: if false;
-    }
-
-    // =============== Core Application Collections ===============
-
-    match /projects/{projectId} {
-      allow read: if isActive() && resource.data.userId == uid();
-      
-      allow create: if isActive() && request.resource.data.userId == uid()
-        && isValidString(request.resource.data.title, 200)
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-      
-      allow update: if isActive() && resource.data.userId == uid()
-        && request.resource.data.userId == resource.data.userId
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.updatedAt == request.time
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['title']) 
-            || isValidString(request.resource.data.title, 200));
-      
-      allow delete: if isActive() && resource.data.userId == uid();
-    }
-
-    match /links/{linkId} {
-      allow read: if isActive() && resource.data.userId == uid();
-      
-      allow create: if isActive() && request.resource.data.userId == uid()
-        && isValidString(request.resource.data.title, 200)
-        && isValidString(request.resource.data.url, 2000)
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-      
-      allow update: if isActive() && resource.data.userId == uid()
-        && request.resource.data.userId == resource.data.userId
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.updatedAt == request.time
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['title']) 
-            || isValidString(request.resource.data.title, 200))
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['url']) 
-            || isValidString(request.resource.data.url, 2000));
-      
-      allow delete: if isActive() && resource.data.userId == uid();
-    }
-
-    match /journals/{journalId} {
-      allow read: if isActive() && resource.data.userId == uid();
-      
-      allow create: if isActive() && request.resource.data.userId == uid()
-        && isValidString(request.resource.data.text, 20000)
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-      
-      allow update: if isActive() && resource.data.userId == uid()
-        && request.resource.data.userId == resource.data.userId
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.updatedAt == request.time
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['text']) 
-            || isValidString(request.resource.data.text, 20000));
-      
-      allow delete: if isActive() && resource.data.userId == uid();
-    }
-
-    match /habits/{habitId} {
-      allow read: if isActive() && resource.data.userId == uid();
-      
-      allow create: if isActive() && request.resource.data.userId == uid()
-        && isValidString(request.resource.data.name, 100)
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-      
-      allow update: if isActive() && resource.data.userId == uid()
-        && request.resource.data.userId == resource.data.userId
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.updatedAt == request.time
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['name']) 
-            || isValidString(request.resource.data.name, 100));
-      
-      allow delete: if isActive() && resource.data.userId == uid();
-    }
-
-    match /support_tickets/{ticketId} {
-      allow read: if isAuth() && (resource.data.userId == uid() || isAdmin());
-      
-      allow create: if isAuth() && request.resource.data.userId == uid()
-        && isValidString(request.resource.data.message, 5000)
-        && request.resource.data.createdAt == request.time;
-      
-      allow update: if isAdmin()
-        || (isAuth() && resource.data.userId == uid()
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userSeen']));
-      
-      allow delete: if isAdmin() || (isAuth() && resource.data.userId == uid());
-    }
-
-    // منع أي وصول لمجموعات غير معرّفة
+    // =========================================================================
+    // 🔒 منع الوصول الافتراضي لأي مجموعة غير مصرح بها
+    // =========================================================================
     match /{document=**} {
       allow read, write: if false;
     }

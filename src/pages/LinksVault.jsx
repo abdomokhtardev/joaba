@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { showDeleteConfirm } from '../utils/toastUtils';
 import { handleFirestoreError } from '../utils/firestoreErrorUtils';
+import { bulkDeleteDocs } from '../utils/firestoreUtils';
 import LinkForm from '../components/links/LinkForm';
 import LinkCard from '../components/links/LinkCard';
 import CategoryManagerModal from '../components/links/CategoryManagerModal';
@@ -14,6 +15,7 @@ const LinksVault = () => {
   const { currentUser } = useAuth();
   const [links, setLinks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [view, setView] = useState('active'); // 'active' or 'archived'
   const [search, setSearch] = useState('');
   const [copiedId, setCopiedId] = useState(null);
@@ -41,20 +43,27 @@ const LinksVault = () => {
       where('userId', '==', currentUser.uid)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const linksData = [];
-      snapshot.forEach((docSnap) => {
-        linksData.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      linksData.sort((a, b) => {
-        if (a.order !== undefined && b.order !== undefined) {
-          return a.order - b.order;
-        }
-        return (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0);
-      });
-      setLinks(linksData);
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      q, 
+      (snapshot) => {
+        const linksData = [];
+        snapshot.forEach((docSnap) => {
+          linksData.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        linksData.sort((a, b) => {
+          if (a.order !== undefined && b.order !== undefined) {
+            return a.order - b.order;
+          }
+          return (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0);
+        });
+        setLinks(linksData);
+        setLoading(false);
+      },
+      (error) => {
+        console.warn("Links listener error:", error);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [currentUser]);
@@ -98,6 +107,8 @@ const LinksVault = () => {
 
   const handleSaveLink = async (e) => {
     e.preventDefault();
+    if (isSaving) return;
+
     const cleanTitle = (currentLink.title || '').trim();
     const cleanUrl = (currentLink.url || '').trim();
     if (!cleanUrl || !cleanTitle || !currentUser) return;
@@ -109,6 +120,7 @@ const LinksVault = () => {
       return toast.error('الرابط (URL) طويل جداً. الحد الأقصى هو 2000 حرف.');
     }
 
+    setIsSaving(true);
     try {
       if (formMode === 'add') {
         await addDoc(collection(db, 'links'), {
@@ -137,6 +149,8 @@ const LinksVault = () => {
       setFormMode('none');
     } catch (error) {
       handleFirestoreError(error, 'حدث خطأ أثناء حفظ الرابط.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -172,11 +186,7 @@ const LinksVault = () => {
     if (selectedIds.length === 0) return;
     showDeleteConfirm(`حذف ${selectedIds.length} عنصر نهائياً؟`, async () => {
       try {
-        const batch = writeBatch(db);
-        selectedIds.forEach((id) => {
-          batch.delete(doc(db, 'links', id));
-        });
-        await batch.commit();
+        await bulkDeleteDocs(db, 'links', selectedIds);
         setSelectedIds([]);
         setIsSelectionMode(false);
       } catch (err) {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlignLeft, Edit2, Trash2, FileText, Calendar, Link as LinkIcon, Check, GripVertical } from 'lucide-react';
 import { priorityColors, priorityLabels } from '../utils/constants';
+import { sanitizeUrl } from '../utils/securityUtils';
 
 const NoteItem = ({
   note, onEdit, onDelete, isSelectionMode, isSelected, onToggleSelect,
@@ -69,7 +70,7 @@ const NoteItem = ({
       </div>
       <p className="text-slate-50 whitespace-pre-wrap leading-relaxed flex-1 text-sm">{note.text}</p>
       {note.link && (
-        <a href={note.link} target="_blank" rel="noreferrer" className="mt-3 text-accent-primary text-xs flex items-center gap-1.5 hover:underline w-fit">
+        <a href={sanitizeUrl(note.link)} target="_blank" rel="noopener noreferrer" className="mt-3 text-accent-primary text-xs flex items-center gap-1.5 hover:underline w-fit">
           <LinkIcon size={12} /> زيارة الرابط المرفق
         </a>
       )}

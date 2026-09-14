@@ -32,6 +32,7 @@ const HabitsTracker = () => {
   const [activeTab, setActiveTab] = useState('active'); // 'active' or 'archived'
   const [selectedHabitId, setSelectedHabitId] = useState(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [pomodoroModal, setPomodoroModal] = useState({ show: false, habit: null });
   
   // Form State
@@ -55,17 +56,26 @@ const HabitsTracker = () => {
   useEffect(() => {
     if (!currentUser) return;
     const q = query(collection(db, 'habits'), where('userId', '==', currentUser.uid));
-    const unsub = onSnapshot(q, (snap) => {
-      const data = [];
-      snap.forEach(d => data.push({ id: d.id, ...d.data() }));
-      setHabits(data.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)));
-      setLoading(false);
-    });
+    const unsub = onSnapshot(
+      q, 
+      (snap) => {
+        const data = [];
+        snap.forEach(d => data.push({ id: d.id, ...d.data() }));
+        setHabits(data.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)));
+        setLoading(false);
+      },
+      (error) => {
+        console.warn("Habits listener error:", error);
+        setLoading(false);
+      }
+    );
     return () => unsub();
   }, [currentUser]);
 
   const handleAddHabit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     const cleanName = newHabitName.trim();
     if (!cleanName) return;
 
@@ -78,6 +88,7 @@ const HabitsTracker = () => {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       await addDoc(collection(db, 'habits'), {
         userId: currentUser.uid,
@@ -95,6 +106,8 @@ const HabitsTracker = () => {
       toast.success('تمت إضافة العادة بنجاح 🎯');
     } catch (err) {
       handleFirestoreError(err, 'حدث خطأ أثناء إضافة العادة.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -314,8 +327,10 @@ const HabitsTracker = () => {
             </div>
           </div>
           <div className="flex gap-2 justify-end mt-2 pt-4 border-t border-glass-border">
-            <button type="button" className="btn-secondary text-sm px-4" onClick={() => setIsAdding(false)}>إلغاء</button>
-            <button type="submit" className="btn-primary text-sm px-6">حفظ</button>
+            <button type="button" className="btn-secondary text-sm px-4" onClick={() => setIsAdding(false)} disabled={isSubmitting}>إلغاء</button>
+            <button type="submit" className="btn-primary text-sm px-6" disabled={isSubmitting}>
+              {isSubmitting ? 'جاري الحفظ...' : 'حفظ'}
+            </button>
           </div>
         </form>
       )}

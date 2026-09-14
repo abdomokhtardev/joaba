@@ -82,7 +82,8 @@
 
 - قواعد أمان صارمة: كل collection مربوطة بـ userId == request.auth.uid
 - مستخدم لا يستطيع رؤية أو تعديل بيانات مستخدم آخر
-- ole و status محمية — المستخدم العادي لا يستطيع تغييرهما
+- 
+ole و status محمية — المستخدم العادي لا يستطيع تغييرهما
 - حد أقصى على استعلامات العامة (.limit(1)) لمنع استخراج قاعدة البيانات
 - /{document=**}: allow read, write: if false; يمنع الوصول لأي Collection غير معرّفة
 - الأدمن وحده يملك صلاحيات الكتابة على collections الحساسة
@@ -207,6 +208,5 @@ firebase deploy --only firestore:rules
 
 ## 📄 الوثائق الإضافية
 
-- [مواصفات تطبيق فلاتر](./flutter_app_spec.md)
 - [مواصفات نظام الدفع والاشتراكات](./PAYMENT_SUBSCRIPTION_SPEC.md)
 - [مواصفات نظام الدعم الفني](./SUPPORT_SYSTEM_SPEC.md)

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { createUserWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../firebase';
 import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { initUserDocument } from '../utils/userUtils';
+import { executeGoogleAuth, handleGoogleRedirectResult } from '../utils/authUtils';
 
 const Signup = () => {
   const [email, setEmail] = useState('');
@@ -15,6 +16,11 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  // Handle redirect result from Google (mobile)
+  useEffect(() => {
+    handleGoogleRedirectResult({ navigate, successMessage: 'تم التسجيل بحساب جوجل بنجاح! 🎉' });
+  }, [navigate]);
+
   const handleSignup = async (e) => {
     e.preventDefault();
 
@@ -22,9 +28,10 @@ const Signup = () => {
       return toast.error('كلمات المرور غير متطابقة.');
     }
 
+    if (loading) return;
     setLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
       
       // Parse ref code from URL
       const urlParams = new URLSearchParams(window.location.search);
@@ -54,21 +61,7 @@ const Signup = () => {
   };
 
   const handleGoogleSignup = async () => {
-    try {
-      const userCredential = await signInWithPopup(auth, googleProvider);
-      
-      const urlParams = new URLSearchParams(window.location.search);
-      const refCode = urlParams.get('ref') || '';
-      
-      await initUserDocument(userCredential.user, refCode);
-
-      toast.success('تم التسجيل بحساب جوجل بنجاح! 🎉');
-      navigate('/');
-    } catch (err) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        toast.error('فشل التسجيل بجوجل.');
-      }
-    }
+    await executeGoogleAuth({ navigate, successMessage: 'تم التسجيل بحساب جوجل بنجاح! 🎉' });
   };
 
   return (

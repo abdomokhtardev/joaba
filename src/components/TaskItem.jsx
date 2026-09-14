@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CheckSquare, Square, Calendar, Clock, Edit2, FileText, ChevronDown, ChevronUp, Trash2, Link as LinkIcon, Check, GripVertical, ListChecks } from 'lucide-react';
 import { priorityColors, priorityLabels } from '../utils/constants';
 import { formatDuration } from '../utils/dateUtils';
+import { sanitizeUrl } from '../utils/securityUtils';
 
 const TaskItem = ({
   task, onToggle, onEdit, onDelete, onToggleNote, onStartPomodoro,
@@ -90,9 +91,9 @@ const TaskItem = ({
             )}
             {task.taskLink && (
               <a
-                href={task.taskLink}
+                href={sanitizeUrl(task.taskLink)}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="flex items-center gap-1 text-accent-primary bg-accent-primary/10 px-2 py-1 rounded-md transition-colors hover:bg-accent-primary/20 hover:underline"
               >
                 <LinkIcon size={12} /> زيارة الرابط

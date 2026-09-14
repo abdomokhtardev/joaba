@@ -9,6 +9,7 @@ import { DEFAULT_PLANS } from '../utils/constants';
 import { calculateFinalPrice } from '../utils/priceUtils';
 import useUnreadTickets from '../hooks/useUnreadTickets';
 import { handleFirestoreError } from '../utils/firestoreErrorUtils';
+import { sanitizeUrl } from '../utils/securityUtils';
 
 import SubscriptionStatusCard from '../components/profile/SubscriptionStatusCard';
 import ActivationCodeForm from '../components/profile/ActivationCodeForm';
@@ -289,7 +290,7 @@ const Profile = () => {
                     <div className="absolute left-0 top-full mt-2 w-60 glass-panel border border-white/15 rounded-2xl p-1.5 shadow-2xl z-50 animate-slideDown bg-[#0f172a]/95 backdrop-blur-xl flex flex-col gap-1">
                       {appLinks.directDownloadLink && (
                         <a
-                          href={appLinks.directDownloadLink}
+                          href={sanitizeUrl(appLinks.directDownloadLink)}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={() => setIsMoreMenuOpen(false)}
@@ -303,7 +304,7 @@ const Profile = () => {
 
                       {appLinks.platformLink && (
                         <a
-                          href={appLinks.platformLink}
+                          href={sanitizeUrl(appLinks.platformLink)}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={() => setIsMoreMenuOpen(false)}
@@ -317,7 +318,7 @@ const Profile = () => {
 
                       {appLinks.developerLink && (
                         <a
-                          href={appLinks.developerLink}
+                          href={sanitizeUrl(appLinks.developerLink)}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={() => setIsMoreMenuOpen(false)}

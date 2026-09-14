@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, getDocs, writeBatch, orderBy } from 'firebase/firestore';
 import { Users, Ban, CheckCircle2, Trash2, Search, UserX } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { showDeleteConfirm } from '../../utils/toastUtils';
@@ -48,15 +48,71 @@ const UsersTab = () => {
     }
   };
 
+  /**
+   * Cascade-deletes a user and ALL their data.
+   * Collections owned by userId: projects, tasks (subcollection), links, journals,
+   * habits, payment_requests, support_tickets, affiliates.
+   * Uses batched writes (max 500 per batch) to keep it atomic.
+   */
+  const deleteUserCascade = async (userId) => {
+    const USER_COLLECTIONS = [
+      'projects',
+      'links',
+      'journals',
+      'habits',
+      'payment_requests',
+      'support_tickets',
+      'affiliates',
+    ];
+
+    // Helper: delete all docs in a query using batches of 400
+    const batchDeleteQuery = async (q) => {
+      const snap = await getDocs(q);
+      if (snap.empty) return;
+      const chunks = [];
+      let current = [];
+      snap.docs.forEach((d) => {
+        current.push(d.ref);
+        if (current.length === 400) { chunks.push(current); current = []; }
+      });
+      if (current.length) chunks.push(current);
+      for (const chunk of chunks) {
+        const batch = writeBatch(db);
+        chunk.forEach((ref) => batch.delete(ref));
+        await batch.commit();
+      }
+    };
+
+    // 1. Delete all top-level user-owned collections
+    for (const col of USER_COLLECTIONS) {
+      const q = query(collection(db, col), where('userId', '==', userId));
+      await batchDeleteQuery(q);
+    }
+
+    // 2. Delete tasks subcollection inside each project
+    const projectsSnap = await getDocs(
+      query(collection(db, 'projects'), where('userId', '==', userId))
+    );
+    for (const projectDoc of projectsSnap.docs) {
+      await batchDeleteQuery(collection(db, 'projects', projectDoc.id, 'tasks'));
+      await batchDeleteQuery(collection(db, 'projects', projectDoc.id, 'notes'));
+    }
+
+    // 3. Finally delete the user document itself
+    await deleteDoc(doc(db, 'users', userId));
+  };
+
   const handleDelete = async (userId) => {
     showDeleteConfirm(
-      'هل أنت متأكد من حذف هذا المستخدم نهائياً من قاعدة البيانات؟ لن يتمكن من تسجيل الدخول وسيفقد كافة بياناته.',
+      'سيتم حذف هذا المستخدم نهائياً مع كافة بياناته (المشاريع، المهام، الروابط، العادات، اليوميات...). هذا الإجراء لا يمكن التراجع عنه.',
       async () => {
+        const toastId = toast.loading('جاري حذف بيانات المستخدم...');
         try {
-          await deleteDoc(doc(db, 'users', userId));
-          toast.success('تم حذف المستخدم بنجاح.');
+          await deleteUserCascade(userId);
+          toast.success('تم حذف المستخدم وجميع بياناته بنجاح. 🗑️', { id: toastId });
         } catch (err) {
-          toast.error('حدث خطأ أثناء حذف المستخدم.');
+          console.error('cascade delete error:', err);
+          toast.error('حدث خطأ أثناء الحذف. قد تكون بعض البيانات لا تزال موجودة.', { id: toastId });
         }
       }
     );

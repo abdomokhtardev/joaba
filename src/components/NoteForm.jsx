@@ -9,7 +9,7 @@ const NoteForm = ({
   resetNoteForm
 }) => {
   return (
-    <form className="bg-black/30 p-5 rounded-2xl flex flex-col gap-4 animate-slideDown border border-accent-primary/20 shrink-0 shadow-lg" onSubmit={handleSaveNote}>
+    <form className="bg-slate-900/90 sm:bg-black/30 p-4 sm:p-5 rounded-2xl flex flex-col gap-4 animate-slideDown border border-accent-primary/20 shadow-xl overflow-y-auto max-h-[78vh] md:max-h-none shrink-0" onSubmit={handleSaveNote}>
       <h3 className="text-slate-50 font-medium text-lg flex items-center gap-2">
         {noteFormMode === 'add' ? <><Plus size={18} className="text-accent-primary" /> إضافة ملاحظة جديدة</> : <><Edit2 size={18} className="text-accent-primary" /> تعديل الملاحظة</>}
       </h3>
@@ -36,9 +36,9 @@ const NoteForm = ({
           </select>
         </div>
       </div>
-      <div className="flex gap-3 justify-end border-t border-glass-border pt-4">
-        <button type="button" className="btn-secondary py-2 px-6 text-sm" onClick={resetNoteForm}>إلغاء</button>
-        <button type="submit" className="btn-primary py-2 px-8 text-sm shadow-md shadow-accent-primary/20">{noteFormMode === 'add' ? 'حفظ الملاحظة' : 'حفظ التعديلات'}</button>
+      <div className="flex gap-3 justify-end border-t border-glass-border pt-3 mt-1 sticky bottom-0 bg-slate-900/95 -mx-4 -mb-4 p-3.5 rounded-b-2xl backdrop-blur-md z-10">
+        <button type="button" className="btn-secondary py-2 px-5 text-sm" onClick={resetNoteForm}>إلغاء</button>
+        <button type="submit" className="btn-primary py-2 px-7 text-sm shadow-md shadow-accent-primary/20">{noteFormMode === 'add' ? 'حفظ الملاحظة' : 'حفظ التعديلات'}</button>
       </div>
     </form>
   );

@@ -59,6 +59,8 @@ const SupportModal = ({ isOpen, onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
+
     const cleanSubject = subject.trim();
     const cleanMessage = message.trim();
     if (!cleanSubject || !cleanMessage || !currentUser) return;
@@ -93,16 +95,6 @@ const SupportModal = ({ isOpen, onClose }) => {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleDeleteTicket = (id) => {
-    showDeleteConfirm('حذف هذا الاستفسار من السجل؟', async () => {
-      try {
-        await deleteDoc(doc(db, 'support_tickets', id));
-      } catch (error) {
-        handleFirestoreError(error, 'حدث خطأ أثناء حذف الاستفسار.');
-      }
-    }, 'تم حذف الاستفسار 🗑️');
   };
 
   const getTypeLabel = (t) => {
@@ -239,11 +231,11 @@ const SupportModal = ({ isOpen, onClose }) => {
               <>
                 <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 p-2.5 rounded-xl text-blue-300 text-xs">
                   <Info size={15} className="shrink-0" />
-                  <span>يمكنك حذف الرسائل بعد الاطلاع على الرد لتوفير المساحة وتنظيم سجلك.</span>
+                  <span>سجل رسائلك وتواصلك مع إدارة المنصة، يمكنك متابعة حالة الردود هنا.</span>
                 </div>
 
                 {userTickets.map((t) => (
-                  <div key={t.id} className="bg-white/5 border border-glass-border p-4 rounded-xl flex flex-col gap-2.5">
+                  <div key={t.id} className="p-3.5 rounded-xl bg-white/5 border border-glass-border flex flex-col gap-2 relative transition-all">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-200">{t.subject}</span>
@@ -258,13 +250,6 @@ const SupportModal = ({ isOpen, onClose }) => {
                         >
                           {t.status === 'replied' ? 'تم الرد ✔️' : 'قيد المراجعة ⏳'}
                         </span>
-                        <button
-                          onClick={() => handleDeleteTicket(t.id)}
-                          className="text-slate-500 hover:text-red-400 p-1 rounded hover:bg-red-500/10 transition-colors"
-                          title="حذف الاستفسار"
-                        >
-                          <Trash2 size={13} />
-                        </button>
                       </div>
                     </div>
 
@@ -279,12 +264,6 @@ const SupportModal = ({ isOpen, onClose }) => {
                           <span className="flex items-center gap-1">
                             <CheckCircle size={13} /> رد الإدارة:
                           </span>
-                          <button
-                            onClick={() => handleDeleteTicket(t.id)}
-                            className="text-[11px] text-red-400 hover:underline flex items-center gap-1"
-                          >
-                            <Trash2 size={11} /> حذف بعد الاطلاع
-                          </button>
                         </div>
                         <p className="text-xs text-slate-200 whitespace-pre-wrap break-words leading-relaxed">
                           {t.adminReply}

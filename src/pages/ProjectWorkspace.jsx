@@ -50,22 +50,29 @@ const ProjectWorkspace = () => {
     if (!currentUser || !id) return;
 
     const projectRef = doc(db, 'projects', id);
-    const unsubscribe = onSnapshot(projectRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setProject(data);
-        const fetchedTabs = data.tabs || [];
-        setTabs(fetchedTabs);
-        // Only set the initial active tab on first load
-        setActiveTabId(prev => {
-          if (!prev && fetchedTabs.length > 0) return fetchedTabs[0].id;
-          return prev;
-        });
-      } else {
-        navigate('/projects');
+    const unsubscribe = onSnapshot(
+      projectRef, 
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setProject(data);
+          const fetchedTabs = data.tabs || [];
+          setTabs(fetchedTabs);
+          // Only set the initial active tab on first load
+          setActiveTabId(prev => {
+            if (!prev && fetchedTabs.length > 0) return fetchedTabs[0].id;
+            return prev;
+          });
+        } else {
+          navigate('/projects');
+        }
+        setLoading(false);
+      },
+      (error) => {
+        console.warn("Project workspace listener error:", error);
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    );
 
     return () => unsubscribe();
   }, [id, currentUser, navigate]); // activeTabId intentionally excluded
@@ -305,7 +312,7 @@ const ProjectWorkspace = () => {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-32px)] gap-4">
+    <div className="flex flex-col min-h-0 md:h-[calc(100vh-32px)] gap-4 pb-20 md:pb-0">
       {showConfetti && (
         <div className="fixed inset-0 z-50 pointer-events-none">
           <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={400} />
@@ -345,9 +352,9 @@ const ProjectWorkspace = () => {
         />
 
         {/* Main Content */}
-        <main className="flex-1 glass-panel p-5 flex flex-col overflow-hidden">
+        <main className="flex-1 glass-panel p-3.5 sm:p-5 flex flex-col min-h-0 md:overflow-hidden">
           {activeTab ? (
-            <div className="flex flex-col h-full gap-4">
+            <div className="flex flex-col flex-1 min-h-0 gap-4">
               {/* Tab Header */}
               <div className="flex justify-between items-center shrink-0">
                 <h2 className="text-xl text-slate-50 font-medium">{activeTab.name}</h2>

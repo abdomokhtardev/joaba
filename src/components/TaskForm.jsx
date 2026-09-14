@@ -45,7 +45,7 @@ const TaskForm = ({
   };
 
   return (
-    <form className="bg-black/30 p-5 rounded-2xl flex flex-col gap-5 animate-slideDown border border-accent-primary/20 shrink-0 shadow-lg" onSubmit={handleSaveTask}>
+    <form className="bg-slate-900/90 sm:bg-black/30 p-4 sm:p-5 rounded-2xl flex flex-col gap-4 sm:gap-5 animate-slideDown border border-accent-primary/20 shadow-xl overflow-y-auto max-h-[78vh] md:max-h-none shrink-0" onSubmit={handleSaveTask}>
       <h3 className="text-slate-50 font-medium text-lg flex items-center gap-2">
         {taskFormMode === 'add' ? <><Plus size={18} className="text-accent-primary" /> إضافة مهمة جديدة</> : <><Edit2 size={18} className="text-accent-primary" /> تعديل المهمة</>}
       </h3>
@@ -61,7 +61,7 @@ const TaskForm = ({
           autoFocus
         />
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-slate-400 font-medium flex items-center gap-1"><Calendar size={12} /> التاريخ</label>
           <input type="date" className="input-glass bg-slate-900 text-slate-100 w-full text-sm py-2 px-3" value={currentTask.date} onChange={e => setCurrentTask(p => ({ ...p, date: e.target.value }))} />
@@ -115,7 +115,7 @@ const TaskForm = ({
           </select>
         </div>
       </div>
-      <div className="flex flex-col md:flex-row gap-4">
+      <div className="flex flex-col gap-4">
         <div className="flex-[2] flex flex-col gap-1.5">
           <label className="text-xs text-slate-400 font-medium flex items-center gap-1"><FileText size={13} /> ملاحظات إضافية (اختياري)</label>
           <textarea className="input-glass w-full min-h-[80px] resize-y text-sm py-3 px-4 leading-relaxed" placeholder="اكتب أي تفاصيل إضافية هنا..." value={currentTask.taskNote || ''} onChange={e => setCurrentTask(p => ({ ...p, taskNote: e.target.value }))} />
@@ -199,9 +199,9 @@ const TaskForm = ({
           </div>
         )}
       </div>
-      <div className="flex gap-3 justify-end border-t border-glass-border pt-4 mt-1">
-        <button type="button" className="btn-secondary py-2 px-6 text-sm" onClick={resetTaskForm}>إلغاء</button>
-        <button type="submit" className="btn-primary py-2 px-8 text-sm shadow-md shadow-accent-primary/20">{taskFormMode === 'add' ? 'إضافة المهمة' : 'حفظ التعديلات'}</button>
+      <div className="flex gap-3 justify-end border-t border-glass-border pt-3 mt-1 sticky bottom-0 bg-slate-900/95 -mx-4 -mb-4 p-3.5 rounded-b-2xl backdrop-blur-md z-10">
+        <button type="button" className="btn-secondary py-2 px-5 text-sm" onClick={resetTaskForm}>إلغاء</button>
+        <button type="submit" className="btn-primary py-2 px-7 text-sm shadow-md shadow-accent-primary/20">{taskFormMode === 'add' ? 'إضافة المهمة' : 'حفظ التعديلات'}</button>
       </div>
     </form>
   );

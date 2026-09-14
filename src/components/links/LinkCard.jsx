@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ExternalLink, Copy, Check, Edit2, Archive, Trash2, Tag, Globe, GripVertical } from 'lucide-react';
 import { priorityColors, priorityLabels } from '../../utils/constants';
+import { sanitizeUrl } from '../../utils/securityUtils';
 
 const getDomain = (url) => {
   try {
@@ -126,9 +127,9 @@ const LinkCard = ({
       <div className="flex items-center justify-between border-t border-glass-border pt-3 mt-2">
         <div className="flex items-center gap-1.5">
           <a
-            href={link.url}
+            href={sanitizeUrl(link.url)}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             onClick={(e) => isSelectionMode && e.stopPropagation()}
             className="flex items-center gap-1 text-xs text-accent-primary bg-accent-primary/10 hover:bg-accent-primary/20 px-2.5 py-1.5 rounded-lg transition-colors"
           >

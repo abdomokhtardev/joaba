@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { showDeleteConfirm } from '../utils/toastUtils';
 import { handleFirestoreError } from '../utils/firestoreErrorUtils';
+import { bulkDeleteDocs } from '../utils/firestoreUtils';
 import JournalForm, { MOODS } from '../components/journal/JournalForm';
 import RecentEntriesList from '../components/journal/RecentEntriesList';
 import JournalDateNavigator from '../components/journal/JournalDateNavigator';
@@ -19,6 +20,7 @@ const Journal = () => {
   const location = useLocation();
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Top level tabs
   const [activeMainTab, setActiveMainTab] = useState('journal');
@@ -67,12 +69,19 @@ const Journal = () => {
       collection(db, 'journals'),
       where('userId', '==', currentUser.uid)
     );
-    const unsub = onSnapshot(q, (snap) => {
-      const data = [];
-      snap.forEach((d) => data.push({ id: d.id, ...d.data() }));
-      setEntries(data);
-      setLoading(false);
-    });
+    const unsub = onSnapshot(
+      q, 
+      (snap) => {
+        const data = [];
+        snap.forEach((d) => data.push({ id: d.id, ...d.data() }));
+        setEntries(data);
+        setLoading(false);
+      },
+      (error) => {
+        console.warn("Journal listener error:", error);
+        setLoading(false);
+      }
+    );
     return () => unsub();
   }, [currentUser]);
 
@@ -83,8 +92,9 @@ const Journal = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!currentEntry.text.trim()) return;
+    if (!currentEntry.text.trim() || isSaving) return;
 
+    setIsSaving(true);
     try {
       if (formMode === 'add') {
         await addDoc(collection(db, 'journals'), {
@@ -109,6 +119,8 @@ const Journal = () => {
       setFormMode('none');
     } catch (err) {
       handleFirestoreError(err, 'حدث خطأ أثناء الحفظ.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -142,11 +154,7 @@ const Journal = () => {
     if (selectedIds.length === 0) return;
     showDeleteConfirm(`حذف ${selectedIds.length} يومية نهائياً؟`, async () => {
       try {
-        const batch = writeBatch(db);
-        selectedIds.forEach((id) => {
-          batch.delete(doc(db, 'journals', id));
-        });
-        await batch.commit();
+        await bulkDeleteDocs(db, 'journals', selectedIds);
         setSelectedIds([]);
         setIsSelectionMode(false);
       } catch (err) {

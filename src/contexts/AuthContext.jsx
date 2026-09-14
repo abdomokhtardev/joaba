@@ -22,14 +22,21 @@ export const AuthProvider = ({ children }) => {
       
       if (user) {
         // Listen to user document
-        unsubscribeUserData = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
-          if (docSnap.exists()) {
-            setUserData({ id: docSnap.id, ...docSnap.data() });
-          } else {
-            setUserData(null);
+        unsubscribeUserData = onSnapshot(
+          doc(db, 'users', user.uid),
+          (docSnap) => {
+            if (docSnap.exists()) {
+              setUserData({ id: docSnap.id, ...docSnap.data() });
+            } else {
+              setUserData(null);
+            }
+            setLoading(false);
+          },
+          (error) => {
+            console.error("Auth user doc snapshot error:", error);
+            setLoading(false);
           }
-          setLoading(false);
-        });
+        );
       } else {
         setUserData(null);
         if (unsubscribeUserData) {

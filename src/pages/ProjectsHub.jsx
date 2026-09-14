@@ -12,6 +12,7 @@ const ProjectsHub = () => {
   const { currentUser } = useAuth();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
   const [view, setView] = useState('active');
   
   const [showAddForm, setShowAddForm] = useState(false);
@@ -31,21 +32,30 @@ const ProjectsHub = () => {
       where('userId', '==', currentUser.uid)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const projectsData = [];
-      snapshot.forEach((doc) => {
-        projectsData.push({ id: doc.id, ...doc.data() });
-      });
-      projectsData.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
-      setProjects(projectsData);
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      q, 
+      (snapshot) => {
+        const projectsData = [];
+        snapshot.forEach((doc) => {
+          projectsData.push({ id: doc.id, ...doc.data() });
+        });
+        projectsData.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+        setProjects(projectsData);
+        setLoading(false);
+      },
+      (error) => {
+        console.warn("Projects listener error:", error);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [currentUser]);
 
   const handleAddProject = async (e) => {
     e.preventDefault();
+    if (isCreating) return;
+
     const cleanTitle = (newProjectName || '').trim();
     if (!cleanTitle || !currentUser) return;
 
@@ -53,6 +63,7 @@ const ProjectsHub = () => {
       return toast.error('اسم المشروع يجب ألا يتجاوز 200 حرف.');
     }
 
+    setIsCreating(true);
     try {
       await addDoc(collection(db, 'projects'), {
         userId: currentUser.uid,
@@ -70,6 +81,8 @@ const ProjectsHub = () => {
       setShowAddForm(false);
     } catch (error) {
       handleFirestoreError(error, 'حدث خطأ أثناء إنشاء المشروع.');
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -153,8 +166,10 @@ const ProjectsHub = () => {
             </div>
           </div>
           <div className="flex gap-3 justify-end border-t border-glass-border pt-5">
-            <button type="button" className="btn-secondary px-6" onClick={() => setShowAddForm(false)}>إلغاء</button>
-            <button type="submit" className="btn-primary px-8 shadow-lg shadow-accent-primary/20">إنشاء المشروع</button>
+            <button type="button" className="btn-secondary px-6" onClick={() => setShowAddForm(false)} disabled={isCreating}>إلغاء</button>
+            <button type="submit" className="btn-primary px-8 shadow-lg shadow-accent-primary/20" disabled={isCreating}>
+              {isCreating ? 'جاري الإنشاء...' : 'إنشاء المشروع'}
+            </button>
           </div>
         </form>
       )}

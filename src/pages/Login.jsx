@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { signInWithEmailAndPassword, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase';
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../firebase';
 import { Lock, Mail, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { initUserDocument } from '../utils/userUtils';
+import { executeGoogleAuth, handleGoogleRedirectResult } from '../utils/authUtils';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -14,12 +14,18 @@ const Login = () => {
 
   const navigate = useNavigate();
 
+  // Handle redirect result from Google (mobile)
+  useEffect(() => {
+    handleGoogleRedirectResult({ navigate });
+  }, [navigate]);
+
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email.trim(), password);
       toast.success('تم تسجيل الدخول بنجاح! 🎉');
       navigate('/');
     } catch (err) {
@@ -30,21 +36,7 @@ const Login = () => {
   };
 
   const handleGoogleLogin = async () => {
-    try {
-      const userCredential = await signInWithPopup(auth, googleProvider);
-
-      const urlParams = new URLSearchParams(window.location.search);
-      const refCode = urlParams.get('ref') || '';
-
-      await initUserDocument(userCredential.user, refCode);
-
-      toast.success('تم تسجيل الدخول بجوجل بنجاح! 🎉');
-      navigate('/');
-    } catch (err) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        toast.error('فشل تسجيل الدخول بجوجل.');
-      }
-    }
+    await executeGoogleAuth({ navigate });
   };
 
   const handleResetPassword = async () => {
